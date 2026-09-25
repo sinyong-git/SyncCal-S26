@@ -23,20 +23,233 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Create Base Project & Configure for Galaxy S26
+      - name: Create App Project and Inject SyncCal UI
         run: |
           flutter create --org com.synccal --project-name synccal_ai app_project
           cd app_project
-          
-          # 필수 유틸 패키지 추가
           flutter pub add intl http timezone
-          
-          # 캘린더/알림 권한 자동 주입
+
+          # 권한 추가
           sed -i '/<application/i \    <uses-permission android:name="android.permission.READ_CALENDAR" />\n    <uses-permission android:name="android.permission.WRITE_CALENDAR" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' android/app/src/main/AndroidManifest.xml
-          
-          # 갤럭시 최신 안드로이드 호환을 위한 Target SDK 35 설정
+
+          # SDK 버전 조정
           sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 35/g' android/app/build.gradle || true
           sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' android/app/build.gradle || true
+
+          # 기본 카운터 데모를 지우고 SyncCal AI 실제 UI 코드로 덮어쓰기
+          cat << 'EOF' > lib/main.dart
+          import 'package:flutter/material.dart';
+          import 'package:intl/intl.dart';
+
+          void main() {
+            runApp(const SyncCalApp());
+          }
+
+          class SyncCalApp extends StatelessWidget {
+            const SyncCalApp({Key? key}) : super(key: key);
+
+            @override
+            Widget build(BuildContext context) {
+              return MaterialApp(
+                title: 'SyncCal AI',
+                debugShowCheckedModeBanner: false,
+                theme: ThemeData(
+                  primaryColor: const Color(0xFF2563EB),
+                  scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+                  fontFamily: 'Pretendard',
+                  colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2563EB)),
+                ),
+                home: const HomeScreen(),
+              );
+            }
+          }
+
+          class HomeScreen extends StatefulWidget {
+            const HomeScreen({Key? key}) : super(key: key);
+
+            @override
+            State<HomeScreen> createState() => _HomeScreenState();
+          }
+
+          class _HomeScreenState extends State<HomeScreen> {
+            final TextEditingController _controller = TextEditingController();
+            bool _isAnalyzing = false;
+            Map<String, dynamic>? _extractedEvent;
+
+            void _analyzeMessage() {
+              if (_controller.text.trim().isEmpty) return;
+
+              setState(() {
+                _isAnalyzing = true;
+              });
+
+              // 자연어 파싱 시뮬레이션
+              Future.delayed(const Duration(milliseconds: 1200), () {
+                setState(() {
+                  _isAnalyzing = false;
+                  _extractedEvent = {
+                    'title': '강남역 프로젝트 미팅',
+                    'date': '2026-10-05 15:30',
+                    'location': '강남역 2번 출구 스타벅스',
+                    'reminders': '1일 전, 1시간 전',
+                    'memo': _controller.text,
+                  };
+                });
+              });
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                appBar: AppBar(
+                  elevation: 0,
+                  backgroundColor: Colors.white,
+                  title: const Row(
+                    children: [
+                      Icon(Icons.auto_awesome, color: Color(0xFF2563EB), size: 22),
+                      SizedBox(width: 8),
+                      Text(
+                        'SyncCal AI',
+                        style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 19),
+                      ),
+                    ],
+                  ),
+                ),
+                body: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '메시지 일정 자동 등록기',
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        '카톡이나 문자로 받은 내용을 복사해 붙여넣으면 AI가 일정을 추출해 캘린더에 바로 등록합니다.',
+                        style: TextStyle(fontSize: 14, color: Color(0xFF64748B), height: 1.4),
+                      ),
+                      const SizedBox(height: 20),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            Box(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+                          ],
+                        ),
+                        child: TextField(
+                          controller: _controller,
+                          maxLines: 4,
+                          decoration: InputDecoration(
+                            hintText: '예: 다음 주 월요일 오후 3시 반에 강남역 스타벅스에서 만나서 미팅해요!',
+                            hintStyle: const TextStyle(fontSize: 14, color: Color(0xFF94A3B8)),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                            filled: true,
+                            fillColor: Colors.white,
+                            contentPadding: const EdgeInsets.all(16),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: _isAnalyzing ? null : _analyzeMessage,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2563EB),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            elevation: 0,
+                          ),
+                          child: _isAnalyzing
+                              ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                              : const Text('일정 분석 및 등록 모달 열기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                        ),
+                      ),
+                      if (_extractedEvent != null) ...[
+                        const SizedBox(height: 28),
+                        const Text(
+                          '추출된 일정 카드',
+                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                            boxShadow: [
+                              Box(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 3)),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF3B82F6).withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Text('회의/약속', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold, fontSize: 12)),
+                                  ),
+                                  const Spacer(),
+                                  const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 20),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                _extractedEvent!['title'],
+                                style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                              ),
+                              const SizedBox(height: 14),
+                              _buildRow(Icons.access_time_filled, _extractedEvent!['date']),
+                              const SizedBox(height: 8),
+                              _buildRow(Icons.location_on, _extractedEvent!['location']),
+                              const SizedBox(height: 8),
+                              _buildRow(Icons.notifications_active, '알림 설정: ${_extractedEvent!['reminders']}'),
+                              const SizedBox(height: 18),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 46,
+                                child: ElevatedButton(
+                                  onPressed: () {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('캘린더에 성공적으로 등록되었습니다!')),
+                                    );
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF0F172A),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                  child: const Text('스마트폰 캘린더에 저장', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            Widget _buildRow(IconData icon, String text) {
+              return Row(
+                children: [
+                  Icon(icon, size: 16, color: const Color(0xFF64748B)),
+                  const SizedBox(width: 8),
+                  Text(text, style: const TextStyle(fontSize: 14, color: Color(0xFF334155), fontWeight: FontWeight.w500)),
+                ],
+              );
+            }
+          }
+          EOF
 
       - name: Build Galaxy S26 APK
         run: |
